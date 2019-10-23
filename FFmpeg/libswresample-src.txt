@@ -1,0 +1,13 @@
+set(libswresample_src
+  libswresample/audioconvert.c
+  libswresample/dither.c
+  libswresample/options.c
+  libswresample/rematrix.c
+  libswresample/resample.c
+  libswresample/resample_dsp.c
+  libswresample/swresample.c
+  libswresample/swresample_frame.c
+  libswresample/x86/resample_init.c
+
+#  libswresample/soxr_resample.c
+)

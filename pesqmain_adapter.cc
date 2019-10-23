@@ -1,9 +1,14 @@
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-user-defined-literal"
+
 extern "C" {
     #include <libavutil/opt.h>
     #include <libavutil/channel_layout.h>
     #include <libavutil/samplefmt.h>
     #include <libswresample/swresample.h>
 }
+
+#pragma clang diagnostic pop
 
 static int get_format_from_sample_fmt(const char **fmt, enum AVSampleFormat sample_fmt)
 {
