@@ -45,6 +45,8 @@ target_link_libraries(Tgvoiprate
   PESQ-MOS
   ffmpeg
   opusfile
+  opus
+  ogg
   )
 
 add_subdirectory(PESQ-MOS)
