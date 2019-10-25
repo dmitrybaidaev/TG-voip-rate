@@ -163,7 +163,7 @@ void WriteWavHeader(uint8_t* buf,
                                bytes_per_sample, num_samples));
 
   WavHeader header;
-  const size_t bytes_in_payload = bytes_per_sample * num_samples;
+  const size_t bytes_in_payload = num_channels * bytes_per_sample * num_samples;
 
   WriteFourCC(&header.riff.header.ID, 'R', 'I', 'F', 'F');
   WriteLE32(&header.riff.header.Size, RiffChunkSize(bytes_in_payload));
