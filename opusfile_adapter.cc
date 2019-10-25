@@ -102,7 +102,7 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
     const std::string &input_file_name = input_filename;
 
     OggOpusFile *of;
-    ogg_int64_t duration;
+    ogg_int64_t duration_in_samples;
     int ret;
 
     std::ofstream wav_file(decoded_wav_file_name, std::ios::out | std::ios::binary);
@@ -117,20 +117,19 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
         return false;
     }
 
-    duration = 0;
-    int channels = 1;
+    duration_in_samples = 0;
+    int channels = 2;
 
     if (op_seekable(of)) {
         opus_int64 size;
         fprintf(stderr, "Total number of links: %i\n", op_link_count(of));
-        duration = op_pcm_total(of, -1);
+        duration_in_samples = op_pcm_total(of, -1);
         fprintf(stderr, "Total duration: ");
-        print_duration(stderr, duration, 3);
-        fprintf(stderr, " (%li samples @ 48 kHz)\n", (long) duration);
+        print_duration(stderr, duration_in_samples, 3);
+        fprintf(stderr, " (%li samples @ 48 kHz)\n", (long) duration_in_samples);
         size = op_raw_total(of, -1);
         fprintf(stderr, "Total size: ");
         print_size(stderr, size, 0, "");
-
 
         channels = 2;// TODO (baidaev): op_channel_count(of, -1);
         fprintf(stderr, "\n");
@@ -138,123 +137,91 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
 
     unsigned char wav_header[webrtc::kWavHeaderSize];
 
-    make_wav_header(wav_header, duration, 48000, channels);
+    make_wav_header(wav_header, duration_in_samples, 48000, channels);
     wav_file.write((const char*)wav_header, sizeof(wav_header));
 
-    ogg_int64_t pcm_offset;
-    ogg_int64_t pcm_print_offset;
-    ogg_int64_t nsamples;
-    opus_int32 bitrate;
-    int prev_li;
-    prev_li = -1;
-    nsamples = 0;
-    pcm_offset = op_pcm_tell(of);
+    ogg_int64_t total_samples_read = 0;
+    int prev_li = -1;
+    ogg_int64_t pcm_offset = op_pcm_tell(of);
     if (pcm_offset != 0) {
         fprintf(stderr, "Non-zero starting PCM offset: %li\n", (long) pcm_offset);
     }
-    pcm_print_offset = pcm_offset - 48000;
-    bitrate = 0;
+
+    static_assert(sizeof(opus_int16) == 2 * sizeof(opus_uint8), "invalid size assumptions!");
+    static_assert(sizeof(opus_uint8) == 1, "invalid size assumptions!");
+
+    constexpr size_t kStereoFrameSize = 120 * 48 * 2;
+    constexpr size_t kSampleSize = sizeof(opus_int16);
+
     for (;;) {
-        ogg_int64_t next_pcm_offset;
-        opus_int16 pcm[120 * (48000 / 1000) * 2];
-        unsigned char out[120 * (48000 / 1000) * 2 * 2];
-        int li;
-        int si;
+        opus_int16 pcm[kStereoFrameSize] = {0};
+        opus_uint8 out[kStereoFrameSize * 2] = {0};
+
         /*Although we would generally prefer to use the float interface, WAV
            files with signed, 16-bit little-endian samples are far more
            universally supported, so that's what we output.*/
-        ret = op_read_stereo(of, pcm, sizeof(pcm) / sizeof(*pcm));
+        const int samples_read = op_read_stereo(of, pcm, sizeof(pcm) / sizeof(*pcm));
 
-        if (ret == OP_HOLE) {
+        if (samples_read == OP_HOLE) {
             fprintf(stderr, "\nHole detected! Corrupt file segment?\n");
             continue;
-        } else if (ret < 0) {
+        } else if (samples_read < 0) {
             fprintf(stderr, "\nError decoding '%s': %i\n", input_file_name.c_str(), ret);
             ret = EXIT_FAILURE;
             break;
         }
-        li = op_current_link(of);
+        int li = op_current_link(of);
         if (li != prev_li) {
             const OpusHead *head;
-            int binary_suffix_len;
-            int ci;
             /*We found a new link.
               Print out some information.*/
-            fprintf(stderr, "Decoding link %i:                          \n", li);
+            fprintf(stderr, "Decoding link: %i                          \n", li);
             head = op_head(of, li);
             fprintf(stderr, "  Channels: %i\n", head->channel_count);
-            if (op_seekable(of)) {
-                ogg_int64_t duration;
-                opus_int64 size;
-                duration = op_pcm_total(of, li);
-                fprintf(stderr, "  Duration: ");
-                print_duration(stderr, duration, 3);
-                fprintf(stderr, " (%li samples @ 48 kHz)\n", (long) duration);
-                size = op_raw_total(of, li);
-                fprintf(stderr, "  Size: ");
-                print_size(stderr, size, 0, "");
-                fprintf(stderr, "\n");
-            }
+
             if (head->input_sample_rate) {
                 fprintf(stderr, "  Original sampling rate: %lu Hz\n", (unsigned long) head->input_sample_rate);
             }
             if (!op_seekable(of)) {
-                pcm_offset = op_pcm_tell(of) - ret;
+                pcm_offset = op_pcm_tell(of) - samples_read;
                 if (pcm_offset != 0) {
                     fprintf(stderr, "Non-zero starting PCM offset in link %i: %li\n", li, (long) pcm_offset);
                 }
             }
         }
-        if (li != prev_li || pcm_offset >= pcm_print_offset + 48000) {
-            opus_int32 next_bitrate;
-            opus_int64 raw_offset;
-            next_bitrate = op_bitrate_instant(of);
-            if (next_bitrate >= 0)
-                bitrate = next_bitrate;
-            raw_offset = op_raw_tell(of);
-            fprintf(stderr, "\r ");
-            print_size(stderr, raw_offset, 0, "");
-            fprintf(stderr, "  ");
-            print_duration(stderr, pcm_offset, 0);
-            fprintf(stderr, "  (");
-            print_size(stderr, bitrate, 1, " ");
-            fprintf(stderr, "bps)                    \r");
-            pcm_print_offset = pcm_offset;
-            fflush(stderr);
-        }
-        next_pcm_offset = op_pcm_tell(of);
-        if (pcm_offset + ret != next_pcm_offset) {
+        ogg_int64_t  next_pcm_offset = op_pcm_tell(of);
+        if (pcm_offset + samples_read != next_pcm_offset) {
             fprintf(stderr, "PCM offset gap! %li+%i!=%li\n", (long) pcm_offset, ret, (long) next_pcm_offset);
         }
         pcm_offset = next_pcm_offset;
-        if (ret <= 0) {
+        if (samples_read <= 0) {
             ret = EXIT_SUCCESS;
             break;
         }
         /*Ensure the data is little-endian before writing it out.*/
-        for (si = 0; si < 2 * ret; si++) {
-            out[2 * si + 0] = (unsigned char) (pcm[si] & 0xFF);
-            out[2 * si + 1] = (unsigned char) (pcm[si] >> 8 & 0xFF);
+        for (size_t i = 0; i < samples_read * kSampleSize; i++) {
+            out[2 * i + 0] = (unsigned char) ( (pcm[i]     ) & 0xFF);
+            out[2 * i + 1] = (unsigned char) ( (pcm[i] >> 8) & 0xFF);
         }
-        wav_file.write((const char *) out, sizeof(*out) * 4 * ret);
+        wav_file.write((const char *) out, 2 * kSampleSize * samples_read);
         if (wav_file.fail()) {
             fprintf(stderr, "Error writing decoded audio data: %s\n", strerror(errno));
             ret = EXIT_FAILURE;
             break;
         }
-        nsamples += ret;
+        total_samples_read += samples_read;
         prev_li = li;
     }
     if (ret == EXIT_SUCCESS) {
         fprintf(stderr, "Done!\n");
-        print_duration(stderr, nsamples, 3);
-        fprintf(stderr, " (%li samples @ 48 kHz).\n", (long) nsamples);
+        print_duration(stderr, total_samples_read, 3);
+        fprintf(stderr, " (%li samples @ 48 kHz).\n", (long) total_samples_read);
     }
-    if (op_seekable(of) && nsamples != duration) {
-        fprintf(stderr, "WARNING: Number of output samples does not match declared file duration.\n");
+    if (op_seekable(of) && total_samples_read != duration_in_samples) {
+        fprintf(stderr, "WARNING: Number of output samples does not match declared file duration_in_samples.\n");
     }
-    if (nsamples != duration) {
-        make_wav_header(wav_header, nsamples, 48000, channels);
+    if (total_samples_read != duration_in_samples) {
+        make_wav_header(wav_header, total_samples_read, 48000, channels);
 
         wav_file.seekp(std::ios_base::beg);
         wav_file << wav_header;
