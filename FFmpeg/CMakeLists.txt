@@ -15,6 +15,7 @@ add_library(ffmpeg STATIC
 target_include_directories(ffmpeg
   PUBLIC
   $<$<BOOL:${MACOS}>:${CMAKE_CURRENT_SOURCE_DIR}/config/macos>
+  $<$<BOOL:${LINUX}>:${CMAKE_CURRENT_SOURCE_DIR}/config/linux>
   ${CMAKE_CURRENT_SOURCE_DIR}/.
 )
 

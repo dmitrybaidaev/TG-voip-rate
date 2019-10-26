@@ -209,7 +209,7 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
         }
         wav_file.write((const char *) out, 2 * kSampleSize * samples_read);
         if (wav_file.fail()) {
-            RATE_LOGE("Error writing decoded audio data: %s\n", strerror(errno));
+            RATE_LOGE("Error writing decoded audio data!\n");
             ret = EXIT_FAILURE;
             break;
         }
@@ -230,7 +230,7 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
         wav_file.seekp(std::ios_base::beg);
         wav_file << wav_header;
         if (wav_file.fail()) {
-            RATE_LOGE("Error rewriting WAV header: %s\n", strerror(errno));
+            RATE_LOGE("Error rewriting WAV header!\n");
             ret = EXIT_FAILURE;
         }
     }
