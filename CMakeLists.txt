@@ -45,6 +45,10 @@ if(USE_ADDRESS_SANITIZER)
     set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 endif()
 
+if(NOT DEFINED AS_LIBRARY)
+  message(STATUS "AS_LIBRARY not defined, set to YES")
+  set(AS_LIBRARY YES)
+endif()
 
 if(AS_LIBRARY)
   set(BIN_NAME opus_decoder)
