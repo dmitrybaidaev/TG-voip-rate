@@ -11,7 +11,7 @@ else
 fi
 
 BUILD_TYPE=Release
-BUILD_DIR=build-$PLATFORM
+BUILD_DIR=build-lib-$PLATFORM
 
 FLAGS_BUILD_TYPE="-DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
 CMAKE_PLATFORM_FLAGS="${FLAGS_BUILD_TYPE} -DCMAKE_TOOLCHAIN_FILE=cmake-config/toolchain.cmake -DPLATFORM=MACOS64"
@@ -28,11 +28,11 @@ fi
 
 pushd out
 
-cmake $CMAKE_PLATFORM_FLAGS -DAS_LIBRARY:BOOL=NO -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=./bin ../..
+cmake $CMAKE_PLATFORM_FLAGS -DAS_LIBRARY:BOOL=YES -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=./bin ../..
 make -j8
 
 popd
 popd
 
 echo BUILD SUCCESS!
-echo result: $BUILD_DIR/out/bin/Tgvoiprate
+echo result: $BUILD_DIR/out/bin/libopus_decoder.a

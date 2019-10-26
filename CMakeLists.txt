@@ -19,6 +19,8 @@ endif()
 
 #add_compile_options("-DPLATFORM=MACOS64 -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON")
 
+message(STATUS "AS_LIBRARY=${AS_LIBRARY}")
+
 set(CMAKE_CXX_STANDARD 11)
 
 file(GLOB WRAPPER_SRC "*.cc")
@@ -43,22 +45,31 @@ if(USE_ADDRESS_SANITIZER)
     set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 endif()
 
-add_executable(Tgvoiprate ${WRAPPER_SRC} ${WAV_FILE_SRC})
 
-target_include_directories(Tgvoiprate
+if(AS_LIBRARY)
+  set(BIN_NAME opus_decoder)
+  list(REMOVE_ITEM WRAPPER_SRC "pesqmain_adapter.cc")
+  add_library(${BIN_NAME} STATIC ${WRAPPER_SRC} ${WAV_FILE_SRC})
+else()
+  set(BIN_NAME tgvoiprate)
+  add_executable(${BIN_NAME} ${WRAPPER_SRC} ${WAV_FILE_SRC})
+endif()
+
+
+target_include_directories(${BIN_NAME}
   PRIVATE
   wav_file
 )
 
-target_compile_options(Tgvoiprate PRIVATE -Wall)
+target_compile_options(${BIN_NAME} PRIVATE -Wall)
 
-target_compile_definitions(Tgvoiprate
+target_compile_definitions(${BIN_NAME}
   PUBLIC
   ${CUSTOM_DEFINES}
   ${WEBRTC_DEFINES}
 )
 
-target_link_libraries(Tgvoiprate
+target_link_libraries(${BIN_NAME}
   PUBLIC
   PESQ-MOS
   ffmpeg
