@@ -5,9 +5,10 @@
 #include "opusfile_adapter.h"
 #include "wav_header.h"
 #include "resampler.h"
+#include "rate_log.h"
 
 namespace {
-void print_duration(FILE *_fp,ogg_int64_t _nsamples,int _frac){
+void print_duration(ogg_int64_t _nsamples,int _frac){
     ogg_int64_t seconds;
     ogg_int64_t minutes;
     ogg_int64_t hours;
@@ -26,28 +27,31 @@ void print_duration(FILE *_fp,ogg_int64_t _nsamples,int _frac){
     days -= weeks*7;
     
     if(weeks)
-        fprintf(_fp,"%liw",(long)weeks);
+        RATE_LOGI("%liw",(long)weeks);
     if(weeks || days)
-        fprintf(_fp,"%id",(int)days);
+        RATE_LOGI("%id",(int)days);
     
     if(weeks || days || hours){
-        if(weeks||days)
-            fprintf(_fp,"%02ih",(int)hours);
-        else 
-            fprintf(_fp,"%ih",(int)hours);
+        if(weeks||days) {
+            RATE_LOGI("%02ih",(int)hours);
+        } else {
+            RATE_LOGI("%ih", (int) hours);
+        }
     }
 
     if(weeks || days || hours || minutes){
-        if(weeks || days || hours)
-            fprintf(_fp,"%02im",(int)minutes);
-        else 
-            fprintf(_fp,"%im",(int)minutes);
-        fprintf(_fp,"%02i",(int)seconds);
-    } else 
-        fprintf(_fp,"%i",(int)seconds);
-    if(_frac)
-        fprintf(_fp, ".%03i", (int)(_nsamples/48));
-    fprintf(_fp, "s");
+        if(weeks || days || hours) {
+            RATE_LOGI("%02im",(int)minutes);
+        } else {
+            RATE_LOGI("%im",(int)minutes);
+        }
+        RATE_LOGI("%02i",(int)seconds);
+    } else
+        RATE_LOGI("%i",(int)seconds);
+    if(_frac) {
+        RATE_LOGI(".%03i", (int)(_nsamples/48));
+    }
+    RATE_LOGI("s\n");
 }
 
 void print_size(FILE *_fp,opus_int64 _nbytes,int _metric, const char *_spacer) {
@@ -69,16 +73,16 @@ void print_size(FILE *_fp,opus_int64 _nbytes,int _metric, const char *_spacer) {
     if(den>1&&val<10){
         if(den>=1000000000)val=(_nbytes+(round/100))/(den/100);
         else val=(_nbytes*100+round)/den;
-        fprintf(_fp,"%li.%02i%s%c",(long)(val/100),(int)(val%100),
+        RATE_LOGI("%li.%02i%s%c",(long)(val/100),(int)(val%100),
                 _spacer,SUFFIXES[shift]);
     }
     else if(den>1&&val<100){
         if(den>=1000000000)val=(_nbytes+(round/10))/(den/10);
         else val=(_nbytes*10+round)/den;
-        fprintf(_fp,"%li.%i%s%c",(long)(val/10),(int)(val%10),
+        RATE_LOGI("%li.%i%s%c",(long)(val/10),(int)(val%10),
                 _spacer,SUFFIXES[shift]);
     }
-    else fprintf(_fp,"%li%s%c",(long)val,_spacer,SUFFIXES[shift]);
+    else RATE_LOGI("%li%s%c",(long)val,_spacer,SUFFIXES[shift]);
 }
 
 /*Make a header for a 48 kHz, mono, signed, 16-bit little-endian PCM WAV.*/
@@ -107,13 +111,13 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
 
     std::ofstream wav_file(decoded_wav_file_name, std::ios::out | std::ios::binary);
     if (!wav_file.is_open()) {
-        fprintf(stderr, "ERROR: failed to open output wav-file (%s)!\n", decoded_wav_file_name.c_str());
+        RATE_LOGE("ERROR: failed to open output wav-file (%s)!\n", decoded_wav_file_name.c_str());
         return false;
     }
 
     of = op_open_file(input_file_name.c_str(), &ret);
     if (of == nullptr) {
-        fprintf(stderr, "ERROR: failed to open input opus(ogg container)-file (%s)!\n", input_filename.c_str());
+        RATE_LOGE("ERROR: failed to open input opus(ogg container)-file (%s)!\n", input_filename.c_str());
         return false;
     }
 
@@ -122,17 +126,17 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
 
     if (op_seekable(of)) {
         opus_int64 size;
-        fprintf(stderr, "Total number of links: %i\n", op_link_count(of));
+        RATE_LOGI("Total number of links: %i\n", op_link_count(of));
         duration_in_samples = op_pcm_total(of, -1);
-        fprintf(stderr, "Total duration: ");
-        print_duration(stderr, duration_in_samples, 3);
-        fprintf(stderr, " (%li samples @ 48 kHz)\n", (long) duration_in_samples);
+        RATE_LOGI("Total duration: ");
+        print_duration(duration_in_samples, 3);
+        RATE_LOGI(" (%li samples @ 48 kHz)\n", (long) duration_in_samples);
         size = op_raw_total(of, -1);
-        fprintf(stderr, "Total size: ");
-        print_size(stderr, size, 0, "");
+        RATE_LOGI("Total size: ");
+        print_size(stdout, size, 0, "");
 
         channels = 2;// TODO (baidaev): op_channel_count(of, -1);
-        fprintf(stderr, "\n");
+        RATE_LOGI("\n");
     }
 
     unsigned char wav_header[webrtc::kWavHeaderSize];
@@ -144,7 +148,7 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
     int prev_li = -1;
     ogg_int64_t pcm_offset = op_pcm_tell(of);
     if (pcm_offset != 0) {
-        fprintf(stderr, "Non-zero starting PCM offset: %li\n", (long) pcm_offset);
+        RATE_LOGE("Non-zero starting PCM offset: %li\n", (long) pcm_offset);
     }
 
     static_assert(sizeof(opus_int16) == 2 * sizeof(opus_uint8), "invalid size assumptions!");
@@ -163,10 +167,10 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
         const int samples_read = op_read_stereo(of, pcm, sizeof(pcm) / sizeof(*pcm));
 
         if (samples_read == OP_HOLE) {
-            fprintf(stderr, "\nHole detected! Corrupt file segment?\n");
+            RATE_LOGE("\nHole detected! Corrupt file segment?\n");
             continue;
         } else if (samples_read < 0) {
-            fprintf(stderr, "\nError decoding '%s': %i\n", input_file_name.c_str(), ret);
+            RATE_LOGE("\nError decoding '%s': %i\n", input_file_name.c_str(), ret);
             ret = EXIT_FAILURE;
             break;
         }
@@ -175,23 +179,23 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
             const OpusHead *head;
             /*We found a new link.
               Print out some information.*/
-            fprintf(stderr, "Decoding link: %i                          \n", li);
+            RATE_LOGI("Decoding link: %i                          \n", li);
             head = op_head(of, li);
-            fprintf(stderr, "  Channels: %i\n", head->channel_count);
+            RATE_LOGI("  Channels: %i\n", head->channel_count);
 
             if (head->input_sample_rate) {
-                fprintf(stderr, "  Original sampling rate: %lu Hz\n", (unsigned long) head->input_sample_rate);
+                RATE_LOGI("  Original sampling rate: %lu Hz\n", (unsigned long) head->input_sample_rate);
             }
             if (!op_seekable(of)) {
                 pcm_offset = op_pcm_tell(of) - samples_read;
                 if (pcm_offset != 0) {
-                    fprintf(stderr, "Non-zero starting PCM offset in link %i: %li\n", li, (long) pcm_offset);
+                    RATE_LOGI("Non-zero starting PCM offset in link %i: %li\n", li, (long) pcm_offset);
                 }
             }
         }
         ogg_int64_t  next_pcm_offset = op_pcm_tell(of);
         if (pcm_offset + samples_read != next_pcm_offset) {
-            fprintf(stderr, "PCM offset gap! %li+%i!=%li\n", (long) pcm_offset, ret, (long) next_pcm_offset);
+            RATE_LOGI("PCM offset gap! %li+%i!=%li\n", (long) pcm_offset, ret, (long) next_pcm_offset);
         }
         pcm_offset = next_pcm_offset;
         if (samples_read <= 0) {
@@ -205,7 +209,7 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
         }
         wav_file.write((const char *) out, 2 * kSampleSize * samples_read);
         if (wav_file.fail()) {
-            fprintf(stderr, "Error writing decoded audio data: %s\n", strerror(errno));
+            RATE_LOGE("Error writing decoded audio data: %s\n", strerror(errno));
             ret = EXIT_FAILURE;
             break;
         }
@@ -213,12 +217,12 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
         prev_li = li;
     }
     if (ret == EXIT_SUCCESS) {
-        fprintf(stderr, "Done!\n");
-        print_duration(stderr, total_samples_read, 3);
-        fprintf(stderr, " (%li samples @ 48 kHz).\n", (long) total_samples_read);
+        RATE_LOGI("Done!\n");
+        print_duration(total_samples_read, 3);
+        RATE_LOGI(" (%li samples @ 48 kHz).\n", (long) total_samples_read);
     }
     if (op_seekable(of) && total_samples_read != duration_in_samples) {
-        fprintf(stderr, "WARNING: Number of output samples does not match declared file duration_in_samples.\n");
+        RATE_LOGI("WARNING: Number of output samples does not match declared file duration_in_samples.\n");
     }
     if (total_samples_read != duration_in_samples) {
         make_wav_header(wav_header, total_samples_read, 48000, channels);
@@ -226,7 +230,7 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
         wav_file.seekp(std::ios_base::beg);
         wav_file << wav_header;
         if (wav_file.fail()) {
-            fprintf(stderr, "Error rewriting WAV header: %s\n", strerror(errno));
+            RATE_LOGE("Error rewriting WAV header: %s\n", strerror(errno));
             ret = EXIT_FAILURE;
         }
     }
@@ -239,12 +243,12 @@ bool opus_decode_mono_16khz(const std::string& input_filename, const std::string
     const std::string& decoded_filename_tmp = input_filename + "_dec_48khz_tmp.wav";
 
     if(!tg_rate::opus_decode(input_filename, decoded_filename_tmp)) {
-        fprintf(stderr, "failed to decode Opus file: %s\n", decoded_filename_tmp.c_str());
+        RATE_LOGE("failed to decode Opus file: %s\n", decoded_filename_tmp.c_str());
         return 1;
     }
 
     if(!tg_rate::resample(decoded_filename_tmp, decoded_16khz_name, 16000, 1)) {
-        fprintf(stderr, "failed to resample Wav file: %s -> mono @ 16kHz\n", decoded_16khz_name.c_str());
+        RATE_LOGE("failed to resample Wav file: %s -> mono @ 16kHz\n", decoded_16khz_name.c_str());
         return 1;
     }
 

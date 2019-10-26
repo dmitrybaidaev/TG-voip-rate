@@ -8,6 +8,15 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     set(LINUX YES)
 endif()
 
+
+if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    set(USE_ADDRESS_SANITIZER ON CACHE BOOL "enable Address sanitizer" FORCE)
+    set(DEBUG ON CACHE BOOL "Config=Debug" FORCE)
+else()
+    set(USE_ADDRESS_SANITIZER OFF CACHE BOOL "disable Address sanitizer" FORCE)
+    set(DEBUG OFF CACHE BOOL "Config=Release" FORCE)
+endif()
+
 #add_compile_options("-DPLATFORM=MACOS64 -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON")
 
 set(CMAKE_CXX_STANDARD 11)
@@ -24,12 +33,12 @@ set(CUSTOM_DEFINES
   __STDC_FORMAT_MACROS
   $<$<BOOL:${MACOS}>:OS_MACOS=1 OS_LINUX=0>
   $<$<BOOL:${LINUX}>:OS_MACOS=0 OS_LINUX=1>
+  $<$<BOOL:${DEBUG}>:DEBUG=1>
   WEBRTC_POSIX
 )
 
-set(USE ADDRESS_SANITIZER)
-if(ADDRESS_SANITIZER)
-    message(INFO "Use AddressSanitizer")
+if(USE_ADDRESS_SANITIZER)
+    message(INFO " Use AddressSanitizer!")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
     set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 endif()

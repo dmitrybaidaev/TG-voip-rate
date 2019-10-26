@@ -2,6 +2,7 @@
 #include <string>
 #include "opusfile_adapter.h"
 #include "PESQ-MOS/pesq.h"
+#include "rate_log.h"
 
 namespace {
     void usage() {
@@ -35,12 +36,12 @@ int main(int argc, const char **argv)
     const std::string in_wav_B = input_filename_B + "_mono_16khz.wav";
 
     if(!tg_rate::opus_decode_mono_16khz(input_filename_A, in_wav_A)) {
-        fprintf(stderr, "failed to decode Opus file: %s\n", input_filename_A.c_str());
+        RATE_LOGE("failed to decode Opus file: %s\n", input_filename_A.c_str());
         return 1;
     }
 
     if(!tg_rate::opus_decode_mono_16khz(input_filename_B, in_wav_B)) {
-        fprintf(stderr, "failed to decode Opus file: %s\n", input_filename_B.c_str());
+        RATE_LOGE("failed to decode Opus file: %s\n", input_filename_B.c_str());
         return 1;
     }
 
@@ -65,9 +66,9 @@ int main(int argc, const char **argv)
     pesq_measure (&ref_info, &deg_info, &err_info, &err, (char **) &error_msg);
 
     if (err == 0) {
-        fprintf(stdout, "%.3f\n", (double) err_info.mapped_mos);
+        RATE_LOGE("%.3f\n", (double) err_info.mapped_mos);
     } else {
-        fprintf(stderr, "P.862.2 Prediction (MOS-LQO) failed!\n");
+        RATE_LOGE("P.862.2 Prediction (MOS-LQO) failed!\n");
     }
     remove(in_wav_A.c_str());
     remove(in_wav_B.c_str());

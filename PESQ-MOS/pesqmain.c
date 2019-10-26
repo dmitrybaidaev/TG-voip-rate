@@ -112,8 +112,10 @@ Further information is also available from www.pesq.org
 
 #define ITU_RESULTS_FILE          "pesq_results.txt"
 
+#if !DEBUG
+    #define printf
+#endif
 
-extern int start_pesq_mos(int argc, const char *argv []);
 
 void usage (void);
 void pesq_measure (SIGNAL_INFO * ref_info, SIGNAL_INFO * deg_info,
