@@ -4,6 +4,7 @@
 #include "opusfile.h"
 #include "opusfile_adapter.h"
 #include "wav_header.h"
+#include "wav_file.h"
 #include "resampler.h"
 #include "rate_log.h"
 
@@ -253,6 +254,77 @@ bool opus_decode_mono_16khz(const std::string& input_filename, const std::string
     }
 
     remove(decoded_filename_tmp.c_str());
+    return true;
+}
+
+bool opus_encode(const std::string& input_wav_filename, const std::string& encoded_file_name) {
+    webrtc::WavReader wav_reader(input_wav_filename);
+    const auto src_nb_samples = wav_reader.num_samples();
+    const auto in_sample_rate = wav_reader.sample_rate();
+    const auto in_channels = wav_reader.num_channels();
+
+    RATE_LOGI("Info: reading file: %s, sr:%d, ch:%d, samples:%d\n",
+              input_wav_filename.c_str(), in_sample_rate, in_channels, src_nb_samples);
+
+    if(in_sample_rate == 0 || wav_reader.num_channels() == 0 || src_nb_samples == 0) {
+        RATE_LOGE("Error: failed to read input wav-file (%s)\n", input_wav_filename.c_str());
+        return false;
+    }
+
+    constexpr size_t FRAME_SIZE = 480;
+    constexpr size_t MAX_FRAME_SIZE = 6 * FRAME_SIZE;
+    constexpr size_t SAMPLE_RATE = 48000;
+    constexpr size_t CHANNELS = 1;
+    constexpr size_t BITRATE = 64000;
+    constexpr size_t MAX_PACKET_SIZE = 3 * 1276;
+
+#define CHECK_ERR(err, text) if((err) < 0) { RATE_LOGE(text); break;}
+    OpusEncoder *encoder = nullptr;
+    int err = 0;
+
+    opus_int16 in[FRAME_SIZE * CHANNELS] = {};
+    unsigned char cbits[MAX_PACKET_SIZE] = {0};
+
+    do {
+        std::ofstream encoded_file(encoded_file_name, std::ios::out | std::ios::binary);
+        if(!encoded_file.good()) {
+            RATE_LOGE("failed to open output file, %s\n", encoded_file_name.c_str())
+        }
+        encoder = opus_encoder_create(SAMPLE_RATE, CHANNELS, OPUS_APPLICATION_AUDIO, &err);
+        CHECK_ERR(err, "Failed to create encode!\n");
+
+        err = opus_encoder_ctl(encoder, OPUS_SET_BITRATE(BITRATE));
+        CHECK_ERR(err, "failed to set bitrate\n");
+
+        size_t bytes = 0;
+        for(;;) {
+            uint8_t pcm_bytes[MAX_FRAME_SIZE * CHANNELS * 2];
+
+            size_t samples_read = wav_reader.ReadSamples(FRAME_SIZE, (int16_t*) pcm_bytes);
+            /* Read a 16 bits/sample audio frame. */
+            if (samples_read == 0)
+                break;
+
+            /* Convert from little-endian ordering. */
+            for (size_t i = 0; i < CHANNELS * FRAME_SIZE; i++) {
+                in[i] = (pcm_bytes[2 * i + 1] << 8) | (pcm_bytes[ 2 * i] << 0);
+            }
+
+            /* Encode the frame. */
+            int bytes_encoded = opus_encode(encoder, in, FRAME_SIZE, cbits, MAX_PACKET_SIZE);
+            if (bytes_encoded < 0) {
+                RATE_LOGE("encode failed: %s\n", opus_strerror(bytes_encoded));
+                return EXIT_FAILURE;
+            }
+            bytes += bytes_encoded;
+
+            encoded_file.write((const char*)cbits, bytes_encoded);
+        }
+        RATE_LOGI("Done! bytes encoded:%d\n", bytes);
+
+    } while(false);
+    opus_encoder_destroy(encoder);
+
     return true;
 }
 
