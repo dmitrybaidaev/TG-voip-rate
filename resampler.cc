@@ -130,7 +130,7 @@ bool resample(const std::string& in_file, const std::string& out_file, const siz
 #endif
         success = true;
 
-        fprintf(stdout, "Info: Resampling done: %s -> %s\n input: sr:%d, ch:%zu out sr:%zu, ch:%zu, total samples:%d",
+        fprintf(stdout, "Info: Resampling done: %s -> %s\n input: sr:%d, ch:%zu out sr:%zu, ch:%zu, total samples:%d\n",
                 in_file.c_str(), out_file.c_str(), in_sample_rate, wav_reader.num_channels(),
                 out_sample_rate, out_channels, dst_nb_samples);
     } while(false);
