@@ -66,7 +66,13 @@ int main(int argc, const char **argv)
     pesq_measure (&ref_info, &deg_info, &err_info, &err, (char **) &error_msg);
 
     if (err == 0) {
-        RATE_LOGE("%.3f\n", (double) err_info.mapped_mos);
+        // map MOS-LQO [1.02117996, 4.64388874] -> [1, 5]
+        double scaled_value = 1.10414616 * err_info.mapped_mos + (-0.10414616);
+
+        scaled_value = max(1, scaled_value);
+        scaled_value = min(5, scaled_value);
+
+        RATE_LOGE("%.3f\n", scaled_value);
     } else {
         RATE_LOGE("P.862.2 Prediction (MOS-LQO) failed!\n");
     }
