@@ -5,3 +5,4 @@
 *.opus
 *.pcm
 /build-lib-macos/
+/xcode-build/
