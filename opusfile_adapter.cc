@@ -4,6 +4,7 @@
 #include "opusfile.h"
 #include "opusfile_adapter.h"
 #include "wav_header.h"
+#include "resampler.h"
 
 namespace {
 void print_duration(FILE *_fp,ogg_int64_t _nsamples,int _frac){
@@ -87,7 +88,6 @@ void make_wav_header(unsigned char header[webrtc::kWavHeaderSize], ogg_int64_t d
        "undefined", and continue to read from the file so long as there is actual
        data.*/
 
-    constexpr size_t samples = 0x7FFFFFFF;
     constexpr size_t bytes_per_sample = 2;
 
     webrtc::WriteWavHeader((uint8_t*)header, num_channels, sample_rate, webrtc::kWavFormatPcm, bytes_per_sample, duration_in_pcm_samples);
@@ -233,6 +233,23 @@ bool opus_decode(const std::string& input_filename, const std::string& decoded_w
     op_free(of);
 
     return ret == EXIT_SUCCESS;
+}
+
+bool opus_decode_mono_16khz(const std::string& input_filename, const std::string& decoded_16khz_name) {
+    const std::string& decoded_filename_tmp = input_filename + "_dec_48khz_tmp.wav";
+
+    if(!tg_rate::opus_decode(input_filename, decoded_filename_tmp)) {
+        fprintf(stderr, "failed to decode Opus file: %s\n", decoded_filename_tmp.c_str());
+        return 1;
+    }
+
+    if(!tg_rate::resample(decoded_filename_tmp, decoded_16khz_name, 16000, 1)) {
+        fprintf(stderr, "failed to resample Wav file: %s -> mono @ 16kHz\n", decoded_16khz_name.c_str());
+        return 1;
+    }
+
+    remove(decoded_filename_tmp.c_str());
+    return true;
 }
 
 } // namespace tg_rate
